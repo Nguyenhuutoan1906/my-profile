@@ -17,6 +17,13 @@ const certificates = [];
 const defaultHeroImage = 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=900&q=85';
 const apiUrl = import.meta.env.VITE_API_URL || '/api';
 
+async function apiRequest(path, options = {}) {
+  const response = await fetch(`${apiUrl}${path}`, options);
+  const data = response.status === 204 ? null : await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || 'Không thể kết nối đến máy chủ.');
+  return data;
+}
+
 const categoryLabel = { frontend: 'Frontend', backend: 'Backend', fullstack: 'Full-stack' };
 
 function showGlassConfirm({ title, message, onConfirm }) {
@@ -50,8 +57,8 @@ function useLocalStorage(key, initialValue) {
 }
 
 function AppShell() {
-  const [projects, setProjects] = useLocalStorage('sean-projects-v1', defaultProjects);
-  const [certificateItems, setCertificateItems] = useLocalStorage('sean-certificates-v1', certificates);
+  const [projects, setProjects] = useState(defaultProjects);
+  const [certificateItems, setCertificateItems] = useState(certificates);
   const [heroImage, setHeroImage] = useLocalStorage('sean-profile-hero-image-v1', defaultHeroImage);
   const [authToken, setAuthToken] = useState(() => sessionStorage.getItem('sean-admin-token') || '');
   const [dark, setDark] = useLocalStorage('portfolio-theme-dark', window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false);
@@ -65,15 +72,12 @@ function AppShell() {
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; }, [dark]);
   useEffect(() => { localStorage.removeItem('sean-admin-credentials-v1'); }, []);
   useEffect(() => {
-    const resetKey = 'sean-content-reset-2026-07';
-    if (!localStorage.getItem(resetKey)) {
-      setProjects([]);
-      setCertificateItems([]);
-      localStorage.removeItem('portfolio-projects');
-      localStorage.removeItem('portfolio-certificates');
-      localStorage.setItem(resetKey, 'done');
-    }
-  }, [setProjects, setCertificateItems]);
+    const controller = new AbortController();
+    Promise.all([apiRequest('/projects', { signal: controller.signal }), apiRequest('/certificates', { signal: controller.signal })])
+      .then(([projectData, certificateData]) => { setProjects(projectData); setCertificateItems(certificateData); })
+      .catch(reason => { if (reason.name !== 'AbortError') console.warn('Không thể tải nội dung từ API.', reason); });
+    return () => controller.abort();
+  }, []);
   useEffect(() => { setMenuOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }, [location.pathname]);
   useEffect(() => {
     const trackScroll = () => setIsScrolled(window.scrollY > 90);
@@ -238,6 +242,13 @@ function Admin({ projects, setProjects, certificates, setCertificates, onLogout 
   const [draft, setDraft] = useState({ title: '', category: 'frontend', year: new Date().getFullYear().toString(), desc: '', image: '', tech: '' });
   const [editingId, setEditingId] = useState(null);
   const [imageError, setImageError] = useState('');
+  const removeItem = async (type, item) => {
+    try {
+      await apiRequest(`/${type}/${item.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${sessionStorage.getItem('sean-admin-token')}` } });
+      if (type === 'certificates') setCertificates(current => current.filter(entry => entry.id !== item.id));
+      else { setProjects(current => current.filter(entry => entry.id !== item.id)); if (editingId === item.id) reset(); }
+    } catch (reason) { window.alert(reason.message || 'Không thể xóa dữ liệu.'); }
+  };
   useEffect(() => {
     const interceptDelete = event => {
       const button = event.target.closest('.admin-page button.delete');
@@ -248,16 +259,23 @@ function Admin({ projects, setProjects, certificates, setCertificates, onLogout 
       const isCertificate = list.classList.contains('certificate-manage-list');
       const item = isCertificate ? certificates[index] : projects[index];
       if (!item) return;
-      showGlassConfirm({ title: isCertificate ? 'Xóa chứng chỉ?' : 'Xóa dự án?', message: `Bạn có chắc muốn xóa “${item.title}”? Thao tác này không thể hoàn tác.`, onConfirm: () => {
-        if (isCertificate) setCertificates(current => current.filter(entry => entry.id !== item.id));
-        else { setProjects(current => current.filter(entry => entry.id !== item.id)); if (editingId === item.id) reset(); }
-      } });
+      showGlassConfirm({ title: isCertificate ? 'Xóa chứng chỉ?' : 'Xóa dự án?', message: `Bạn có chắc muốn xóa “${item.title}”? Thao tác này không thể hoàn tác.`, onConfirm: () => { void removeItem(isCertificate ? 'certificates' : 'projects', item); } });
     };
     document.addEventListener('click', interceptDelete, true);
     return () => document.removeEventListener('click', interceptDelete, true);
   }, [projects, certificates, editingId, setProjects, setCertificates]);
   const reset = () => { setDraft({ title: '', category: 'frontend', year: new Date().getFullYear().toString(), desc: '', image: '', tech: '' }); setEditingId(null); setImageError(''); };
-  const submit = event => { event.preventDefault(); if (!draft.image) { setImageError('Vui lòng chọn ảnh dự án từ máy tính trước khi lưu.'); return; } const project = { ...draft, tech: draft.tech.split(',').map(item => item.trim()).filter(Boolean) }; if (editingId) setProjects(projects.map(item => item.id === editingId ? { ...project, id: editingId } : item)); else setProjects([{ ...project, id: `project-${Date.now()}` }, ...projects]); reset(); };
+  const submit = async event => {
+    event.preventDefault();
+    if (!draft.image) { setImageError('Vui lòng chọn ảnh dự án từ máy tính trước khi lưu.'); return; }
+    const project = { ...draft, tech: draft.tech.split(',').map(item => item.trim()).filter(Boolean) };
+    const options = { method: editingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('sean-admin-token')}` }, body: JSON.stringify(project) };
+    try {
+      const saved = await apiRequest(editingId ? `/projects/${editingId}` : '/projects', options);
+      setProjects(current => editingId ? current.map(item => item.id === editingId ? saved : item) : [saved, ...current]);
+      reset();
+    } catch (reason) { setImageError(reason.message || 'Không thể lưu dự án.'); }
+  };
   const edit = project => { setImageError(''); setEditingId(project.id); setDraft({ ...project, tech: project.tech.join(', ') }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const selectImage = event => {
     const file = event.target.files?.[0];
@@ -274,7 +292,15 @@ function Admin({ projects, setProjects, certificates, setCertificates, onLogout 
 function CertificateManager({ certificates, setCertificates }) {
   const empty = { title: '', issuer: '', date: '' };
   const [draft, setDraft] = useState(empty); const [editingId, setEditingId] = useState(null);
-  const submit = event => { event.preventDefault(); if (editingId) setCertificates(certificates.map(item => item.id === editingId ? { ...draft, id: editingId } : item)); else setCertificates([{ ...draft, id: `certificate-${Date.now()}` }, ...certificates]); setDraft(empty); setEditingId(null); };
+  const submit = async event => {
+    event.preventDefault();
+    const options = { method: editingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('sean-admin-token')}` }, body: JSON.stringify(draft) };
+    try {
+      const saved = await apiRequest(editingId ? `/certificates/${editingId}` : '/certificates', options);
+      setCertificates(current => editingId ? current.map(item => item.id === editingId ? saved : item) : [saved, ...current]);
+      setDraft(empty); setEditingId(null);
+    } catch (reason) { window.alert(reason.message || 'Không thể lưu chứng chỉ.'); }
+  };
   const edit = certificate => { setEditingId(certificate.id); setDraft({ title: certificate.title, issuer: certificate.issuer, date: certificate.date }); };
   const cancelEdit = () => { setDraft(empty); setEditingId(null); };
   return <section className="certificate-manager"><div className="admin-section-heading"><div><p className="section-kicker">CHỨNG CHỈ</p><h2>Quản lý chứng chỉ</h2></div><div className="certificate-heading-actions"><span>{certificates.length} chứng chỉ</span>{editingId && <button type="button" className="cancel-edit-header" onClick={cancelEdit}>Hủy chỉnh sửa</button>}</div></div><div className="admin-layout"><form className="project-form certificate-form" onSubmit={submit}>{editingId && <div className="editing-notice">Đang chỉnh sửa chứng chỉ. Các thay đổi chỉ được lưu khi bạn nhấn “Lưu thay đổi”.</div>}<h2>{editingId ? 'Cập nhật chứng chỉ' : 'Thêm chứng chỉ mới'}</h2><label>Tên chứng chỉ<input required value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} placeholder="Ví dụ: AWS Cloud Practitioner" /></label><label>Tổ chức cấp<input required value={draft.issuer} onChange={e => setDraft({ ...draft, issuer: e.target.value })} placeholder="Ví dụ: Amazon Web Services" /></label><label>Thời gian cấp<input required value={draft.date} onChange={e => setDraft({ ...draft, date: e.target.value })} placeholder="Ví dụ: 07/2026" /></label><div className="form-actions"><button className="button primary" type="submit"><FaCertificate /> {editingId ? 'Lưu thay đổi' : 'Thêm chứng chỉ'}</button>{editingId && <button className="button ghost cancel-edit" type="button" onClick={cancelEdit}>Hủy chỉnh sửa</button>}</div></form><div className="manage-list certificate-manage-list"><h2>Danh sách chứng chỉ</h2>{certificates.map(certificate => <article key={certificate.id ?? certificate.title} className={editingId === certificate.id ? 'is-editing' : ''}><FaCertificate className="manage-cert-icon" /><div><span>{certificate.date}</span><h3>{certificate.title}</h3><p>{certificate.issuer}</p></div>{editingId === certificate.id ? <button className="cancel-row-button" type="button" onClick={cancelEdit}>Hủy sửa</button> : <button onClick={() => edit(certificate)}>Sửa</button>}<button className="delete" onClick={() => { if (window.confirm(`Xóa chứng chỉ “${certificate.title}”?`)) setCertificates(certificates.filter(item => item.id !== certificate.id)); }} aria-label={`Xóa ${certificate.title}`}><FaTrash /></button></article>)}</div></div></section>;
