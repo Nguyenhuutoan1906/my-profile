@@ -14,6 +14,8 @@ const jwtSecret = process.env.JWT_SECRET;
 const databaseUrl = process.env.DATABASE_URL;
 const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
 const isLocal = frontendOrigin.includes('localhost') || frontendOrigin.includes('127.0.0.1');
+const contactRecipient = process.env.CONTACT_TO_EMAIL || 'nguyenhuutoan1906@gmail.com';
+const contactSender = process.env.RESEND_FROM_EMAIL || 'Sean Portfolio <onboarding@resend.dev>';
 
 if (!jwtSecret || jwtSecret.length < 32) throw new Error('JWT_SECRET must be at least 32 characters and set in .env.');
 if (!databaseUrl) throw new Error('DATABASE_URL must be set in .env.');
@@ -30,6 +32,7 @@ app.use(cors({ origin: frontendOrigin, credentials: true, methods: ['GET', 'POST
 app.use(express.json({ limit: '2800kb' }));
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-7', legacyHeaders: false, message: { message: 'Too many login attempts. Please try again in 15 minutes.' } });
+const contactLimiter = rateLimit({ windowMs: 10 * 60 * 1000, limit: 5, standardHeaders: 'draft-7', legacyHeaders: false, message: { message: 'Please wait before sending another message.' } });
 const text = (value, maximum) => typeof value === 'string' && value.trim().length > 0 && value.trim().length <= maximum ? value.trim() : null;
 const safeEqual = (left, right) => typeof left === 'string' && typeof right === 'string' && left.length === right.length && crypto.timingSafeEqual(Buffer.from(left), Buffer.from(right));
 const cookieOptions = { httpOnly: true, secure: !isLocal, sameSite: isLocal ? 'lax' : 'none', maxAge: 8 * 60 * 60 * 1000, path: '/api' };
@@ -81,8 +84,19 @@ function certificateInput(body) {
 }
 function projectRow(row) { return { id: String(row.id), title: row.title, category: row.category, year: row.year, desc: row.description, image: row.image, tech: row.tech, createdAt: row.created_at, updatedAt: row.updated_at }; }
 function certificateRow(row) { return { id: String(row.id), title: row.title, issuer: row.issuer, date: row.date, createdAt: row.created_at, updatedAt: row.updated_at }; }
+function escapeHtml(value) { return value.replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]); }
 
 app.get('/api/health', (_request, response) => response.json({ status: 'ok' }));
+app.post('/api/contact', contactLimiter, async (request, response) => {
+  const name = text(request.body.name, 100); const email = text(request.body.email, 254); const message = text(request.body.message, 3000);
+  if (request.body.website) return response.status(204).end();
+  if (!name || !email || !message || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return response.status(400).json({ message: 'Please enter valid contact information.' });
+  if (!process.env.RESEND_API_KEY) return response.status(503).json({ message: 'Email service is not configured yet.' });
+  const mail = { from: contactSender, to: [contactRecipient], reply_to: email, subject: `Portfolio message from ${name}`, text: `Name: ${name}\nEmail: ${email}\n\n${message}`, html: `<h2>New portfolio message</h2><p><strong>Name:</strong> ${escapeHtml(name)}<br><strong>Email:</strong> ${escapeHtml(email)}</p><p>${escapeHtml(message).replace(/\n/g, '<br>')}</p>` };
+  const resendResponse = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(mail) });
+  if (!resendResponse.ok) { console.error('Resend contact delivery failed:', resendResponse.status); return response.status(502).json({ message: 'Unable to send the message right now.' }); }
+  return response.status(202).json({ message: 'Message sent.' });
+});
 app.post('/api/auth/login', loginLimiter, async (request, response) => {
   const username = text(request.body.username, 80) || '';
   const result = await pool.query('SELECT id, username, password_hash FROM users WHERE username = $1', [username]);
