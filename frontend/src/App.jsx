@@ -18,7 +18,7 @@ const defaultHeroImage = 'https://images.unsplash.com/photo-1531123897727-8f129e
 const apiUrl = import.meta.env.VITE_API_URL || '/api';
 
 async function apiRequest(path, options = {}) {
-  const response = await fetch(`${apiUrl}${path}`, options);
+  const response = await fetch(`${apiUrl}${path}`, { credentials: 'include', ...options });
   const data = response.status === 204 ? null : await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.message || 'Không thể kết nối đến máy chủ.');
   return data;
@@ -60,7 +60,7 @@ function AppShell() {
   const [projects, setProjects] = useState(defaultProjects);
   const [certificateItems, setCertificateItems] = useState(certificates);
   const [heroImage, setHeroImage] = useLocalStorage('sean-profile-hero-image-v1', defaultHeroImage);
-  const [authToken, setAuthToken] = useState(() => sessionStorage.getItem('sean-admin-token') || '');
+  const [csrfToken, setCsrfToken] = useState(() => sessionStorage.getItem('sean-admin-csrf') || '');
   const [dark, setDark] = useLocalStorage('portfolio-theme-dark', window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
@@ -71,6 +71,9 @@ function AppShell() {
 
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; }, [dark]);
   useEffect(() => { localStorage.removeItem('sean-admin-credentials-v1'); }, []);
+  useEffect(() => {
+    apiRequest('/auth/session').then(data => { sessionStorage.setItem('sean-admin-csrf', data.csrfToken); setCsrfToken(data.csrfToken); setIsAdmin(true); }).catch(() => { sessionStorage.removeItem('sean-admin-csrf'); setCsrfToken(''); });
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([apiRequest('/projects', { signal: controller.signal }), apiRequest('/certificates', { signal: controller.signal })])
@@ -112,14 +115,14 @@ function AppShell() {
         <Route path="/projects" element={<Projects projects={projects} onSelect={setSelectedProject} />} />
         <Route path="/certificates" element={<Certificates certificates={certificateItems} />} />
         <Route path="/contact" element={<Contact />} />
-        <Route path="/admin" element={isAdmin ? <Admin projects={projects} setProjects={setProjects} certificates={certificateItems} setCertificates={setCertificateItems} onLogout={() => { sessionStorage.removeItem('sean-admin-token'); setAuthToken(''); setIsAdmin(false); }} /> : <AdminRequired onLogin={() => setLoginOpen(true)} />} />
-        <Route path="/profile" element={isAdmin ? <ProfileSecurityWithAppearance authToken={authToken} heroImage={heroImage} setHeroImage={setHeroImage} /> : <AdminRequired onLogin={() => setLoginOpen(true)} />} />
+        <Route path="/admin" element={isAdmin ? <Admin projects={projects} setProjects={setProjects} certificates={certificateItems} setCertificates={setCertificateItems} onLogout={() => { void apiRequest('/auth/logout', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } }); sessionStorage.removeItem('sean-admin-csrf'); setCsrfToken(''); setIsAdmin(false); }} /> : <AdminRequired onLogin={() => setLoginOpen(true)} />} />
+        <Route path="/profile" element={isAdmin ? <ProfileSecurityWithAppearance csrfToken={csrfToken} heroImage={heroImage} setHeroImage={setHeroImage} /> : <AdminRequired onLogin={() => setLoginOpen(true)} />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </main>
     <Footer />
     {selectedProject && <ProjectModal project={selectedProject} onClose={() => setSelectedProject(null)} />}
-    {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} onSuccess={token => { sessionStorage.setItem('sean-admin-token', token); setAuthToken(token); setIsAdmin(true); setLoginOpen(false); }} />}
+    {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} onSuccess={token => { sessionStorage.setItem('sean-admin-csrf', token); setCsrfToken(token); setIsAdmin(true); setLoginOpen(false); }} />}
   </div>;
 }
 
@@ -182,7 +185,7 @@ function LoginModal({ onClose, onSuccess }) {
   const [username, setUsername] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState('');
   const submit = async event => {
     event.preventDefault(); setError('');
-    try { const response = await fetch(`${apiUrl}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) }); const data = await response.json(); if (!response.ok) throw new Error(data.message); onSuccess(data.token); }
+    try { const data = await apiRequest('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) }); onSuccess(data.csrfToken); }
     catch (reason) { setError(reason.message || 'Không thể đăng nhập. Vui lòng thử lại.'); }
   };
   return <div className="modal-backdrop" onMouseDown={onClose} role="presentation"><form className="login-modal" onMouseDown={e => e.stopPropagation()} onSubmit={submit} aria-label="Đăng nhập quản trị"><button className="modal-close" type="button" onClick={onClose} aria-label="Đóng"><FaTimes /></button><FaLock className="login-icon" /><p className="section-kicker">KHU VỰC RIÊNG</p><h2>Đăng nhập quản trị</h2><p>Quản lý các dự án hiển thị trên website.</p>{error && <div className="login-error">{error}</div>}<label>Tài khoản<input autoFocus required value={username} onChange={e => setUsername(e.target.value)} placeholder="admin" /></label><label>Mật khẩu<input required type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••" /></label><button className="button primary" type="submit">Đăng nhập</button></form></div>;
@@ -190,7 +193,7 @@ function LoginModal({ onClose, onSuccess }) {
 
 function AdminRequired({ onLogin }) { return <section className="section not-found"><FaLock className="locked-icon" /><p className="section-kicker">KHU VỰC RIÊNG</p><h1 className="page-title">Cần quyền quản trị</h1><button className="button primary" onClick={onLogin}>Đăng nhập quản trị</button></section>; }
 
-function ProfileSecurity({ authToken }) {
+function ProfileSecurity({ csrfToken }) {
   const [currentPassword, setCurrentPassword] = useState(''); const [newPassword, setNewPassword] = useState(''); const [confirmation, setConfirmation] = useState(''); const [status, setStatus] = useState('');
   const rules = [newPassword.length >= 8, /[A-Z]/.test(newPassword), /\d/.test(newPassword)];
   const submit = async event => {
@@ -198,8 +201,7 @@ function ProfileSecurity({ authToken }) {
     if (!rules.every(Boolean)) { setStatus('Mật khẩu mới chưa đáp ứng các yêu cầu bảo mật.'); return; }
     if (newPassword !== confirmation) { setStatus('Xác nhận mật khẩu chưa khớp.'); return; }
     try {
-      const response = await fetch(`${apiUrl}/auth/change-password`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` }, body: JSON.stringify({ currentPassword, newPassword }) });
-      const data = await response.json(); if (!response.ok) throw new Error(data.message);
+      await apiRequest('/auth/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: JSON.stringify({ currentPassword, newPassword }) });
       setCurrentPassword(''); setNewPassword(''); setConfirmation(''); setStatus('Đã cập nhật mật khẩu thành công.');
     } catch (reason) { setStatus(reason.message || 'Không thể cập nhật mật khẩu.'); }
   };
@@ -234,8 +236,8 @@ function ProfileAppearance({ heroImage, setHeroImage }) {
   return <section className="section page-section profile-security"><p className="section-kicker">HỒ SƠ</p><h1 className="page-title">Ảnh giới thiệu</h1><p className="page-lead">Thay đổi ảnh chân dung hiển thị ở trang Giới thiệu.</p><div className="appearance-layout"><div className="appearance-preview"><img src={heroImage} alt="Xem trước ảnh hồ sơ" /><span>Ảnh hiển thị</span></div><div className="appearance-controls"><FaCode className="appearance-icon" /><h2>Cập nhật ảnh hồ sơ</h2><p>Chọn ảnh PNG, JPG hoặc WebP, sau đó căn chỉnh phần ảnh bạn muốn dùng.</p>{message && <div className={message.startsWith('Đã') ? 'success-message' : 'image-error'}>{message}</div>}<label className="upload-image-button">Chọn và cắt ảnh<input type="file" accept="image/png,image/jpeg,image/webp" onChange={selectImage} /></label><button className="button ghost" type="button" onClick={() => { setHeroImage(defaultHeroImage); setMessage('Đã khôi phục ảnh mặc định.'); }}>Khôi phục ảnh mặc định</button><small>Ảnh được lưu cục bộ trên trình duyệt, tối đa 2 MB.</small></div></div>{source && <div className="cropper-backdrop" role="presentation"><section className="cropper-dialog" role="dialog" aria-modal="true" aria-label="Cắt ảnh hồ sơ"><div className="cropper-heading"><div><p className="section-kicker">CẮT ẢNH</p><h2>Chọn khung ảnh</h2></div><button type="button" onClick={() => setSource('')}>Hủy</button></div><div className="cropper-canvas"><Cropper image={source} crop={crop} zoom={zoom} aspect={4 / 5} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_area, pixels) => setCroppedArea(pixels)} /></div><label className="zoom-control">Thu phóng<input type="range" min="1" max="3" step="0.05" value={zoom} onChange={event => setZoom(Number(event.target.value))} /></label><div className="cropper-actions"><button className="button ghost" type="button" onClick={() => setSource('')}>Hủy</button><button className="button primary" type="button" onClick={saveCrop}>Dùng phần ảnh này</button></div></section></div>}</section>;
 }
 
-function ProfileSecurityWithAppearance({ authToken, heroImage, setHeroImage }) {
-  return <><ProfileSecurity authToken={authToken} /><ProfileAppearance heroImage={heroImage} setHeroImage={setHeroImage} /></>;
+function ProfileSecurityWithAppearance({ csrfToken, heroImage, setHeroImage }) {
+  return <><ProfileSecurity csrfToken={csrfToken} /><ProfileAppearance heroImage={heroImage} setHeroImage={setHeroImage} /></>;
 }
 
 function Admin({ projects, setProjects, certificates, setCertificates, onLogout }) {
@@ -244,7 +246,7 @@ function Admin({ projects, setProjects, certificates, setCertificates, onLogout 
   const [imageError, setImageError] = useState('');
   const removeItem = async (type, item) => {
     try {
-      await apiRequest(`/${type}/${item.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${sessionStorage.getItem('sean-admin-token')}` } });
+      await apiRequest(`/${type}/${item.id}`, { method: 'DELETE', headers: { 'X-CSRF-Token': sessionStorage.getItem('sean-admin-csrf') || '' } });
       if (type === 'certificates') setCertificates(current => current.filter(entry => entry.id !== item.id));
       else { setProjects(current => current.filter(entry => entry.id !== item.id)); if (editingId === item.id) reset(); }
     } catch (reason) { window.alert(reason.message || 'Không thể xóa dữ liệu.'); }
@@ -269,7 +271,7 @@ function Admin({ projects, setProjects, certificates, setCertificates, onLogout 
     event.preventDefault();
     if (!draft.image) { setImageError('Vui lòng chọn ảnh dự án từ máy tính trước khi lưu.'); return; }
     const project = { ...draft, tech: draft.tech.split(',').map(item => item.trim()).filter(Boolean) };
-    const options = { method: editingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('sean-admin-token')}` }, body: JSON.stringify(project) };
+    const options = { method: editingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': sessionStorage.getItem('sean-admin-csrf') || '' }, body: JSON.stringify(project) };
     try {
       const saved = await apiRequest(editingId ? `/projects/${editingId}` : '/projects', options);
       setProjects(current => editingId ? current.map(item => item.id === editingId ? saved : item) : [saved, ...current]);
@@ -294,7 +296,7 @@ function CertificateManager({ certificates, setCertificates }) {
   const [draft, setDraft] = useState(empty); const [editingId, setEditingId] = useState(null);
   const submit = async event => {
     event.preventDefault();
-    const options = { method: editingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('sean-admin-token')}` }, body: JSON.stringify(draft) };
+    const options = { method: editingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': sessionStorage.getItem('sean-admin-csrf') || '' }, body: JSON.stringify(draft) };
     try {
       const saved = await apiRequest(editingId ? `/certificates/${editingId}` : '/certificates', options);
       setCertificates(current => editingId ? current.map(item => item.id === editingId ? saved : item) : [saved, ...current]);
