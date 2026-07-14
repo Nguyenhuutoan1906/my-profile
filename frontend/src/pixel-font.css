@@ -1,0 +1,30 @@
+/* Tech-retro typography for the pixel dashboard. */
+body,
+button,
+input,
+textarea,
+select {
+  font-family:'Chakra Petch',sans-serif;
+}
+
+.site-shell,
+.site-shell * {
+  font-family:'Chakra Petch',sans-serif !important;
+}
+
+.brand,
+h1,
+h2,
+h3,
+.section-kicker,
+.eyebrow,
+.main-nav a,
+.button,
+.footer-links h3,
+.footer-contact h3 {
+  font-family:'Chakra Petch',sans-serif;
+}
+
+.hero h1,
+.page-title { font-family:'Chakra Petch',sans-serif; letter-spacing:-1.5px; }
+.main-nav a { letter-spacing:0; }

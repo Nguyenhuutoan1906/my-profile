@@ -1,0 +1,74 @@
+/* Higher contrast typography on the mint artwork. */
+body,
+.site-header { color:#083f38; }
+
+.hero h1,
+.page-title,
+.intro-grid h2,
+.section-heading h2,
+.project-card h3,
+.skill-card h3,
+.certificate h3,
+.profile-card h2,
+.appearance-controls h2,
+.security-form-heading h2 { color:#052f2a; }
+
+.lead,
+.page-lead,
+.intro-text,
+.project-card p,
+.skill-card p,
+.certificate p,
+.footer-brand p,
+.footer-links a,
+.footer-contact > a,
+.footer-bottom,
+.appearance-controls p,
+.appearance-controls small,
+.security-form-heading p,
+.security-note { color:#174f47; }
+
+.main-nav a { color:#174f47; font-weight:800; }
+.main-nav a.active { color:#006f58; }
+.site-footer { color:#174f47; }
+.site-footer .footer-links h3,
+.site-footer .footer-contact h3,
+.site-footer .footer-brand .brand { color:#063d35; }
+
+:root[data-theme='dark'] body,
+:root[data-theme='dark'] .site-header { color:#eafff7; }
+
+:root[data-theme='dark'] .hero h1,
+:root[data-theme='dark'] .page-title,
+:root[data-theme='dark'] .intro-grid h2,
+:root[data-theme='dark'] .section-heading h2,
+:root[data-theme='dark'] .project-card h3,
+:root[data-theme='dark'] .skill-card h3,
+:root[data-theme='dark'] .certificate h3,
+:root[data-theme='dark'] .profile-card h2,
+:root[data-theme='dark'] .appearance-controls h2,
+:root[data-theme='dark'] .security-form-heading h2 { color:#f0fff9; }
+
+:root[data-theme='dark'] .lead,
+:root[data-theme='dark'] .page-lead,
+:root[data-theme='dark'] .intro-text,
+:root[data-theme='dark'] .project-card p,
+:root[data-theme='dark'] .skill-card p,
+:root[data-theme='dark'] .certificate p { color:#cef4e4; }
+
+/* Fantasy display typography without compromising reading comfort. */
+.brand,
+h1,
+h2,
+.section-kicker,
+.eyebrow,
+.main-nav a,
+.footer-links h3,
+.footer-contact h3 { font-family:'Cinzel Decorative',fantasy; }
+
+.hero h1,
+.page-title { font-family:'Cinzel Decorative',fantasy; letter-spacing:-2px; }
+
+.section-kicker,
+.eyebrow,
+.main-nav a { font-family:Cinzel,serif; letter-spacing:.3px; }

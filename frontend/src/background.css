@@ -1,0 +1,22 @@
+/* User-supplied Y2K background artwork */
+body {
+  background:
+    linear-gradient(rgba(225, 255, 249, 0.18), rgba(226, 236, 255, 0.2)),
+    url('/nen.jpg') center / cover fixed;
+}
+
+:root[data-theme='dark'] body {
+  background:
+    linear-gradient(rgba(10, 21, 52, 0.54), rgba(17, 20, 59, 0.56)),
+    url('/nen.jpg') center / cover fixed;
+}
+
+.site-shell::before,
+.site-shell::after {
+  display: none;
+}
+
+/* Mint palette, tuned to the supplied background image. */
+:root { color:#0b4d45; }
+.site-header { border-color:rgba(232,255,247,.88); background:linear-gradient(100deg,rgba(242,255,250,.66),rgba(184,246,227,.5)); box-shadow:0 12px 32px rgba(0,105,80,.2),inset 0 2px rgba(255,255,255,.95),inset 0 -1px rgba(49,181,143,.3); }.brand span { color:#008a6c; }.main-nav a { color:#20695d; }.main-nav a.active { color:#008b6a; text-shadow:0 0 12px rgba(0,155,116,.28); }.theme-button { color:#08785f; background:linear-gradient(145deg,rgba(255,255,255,.82),rgba(190,249,229,.55)); }.hero h1 em { background:linear-gradient(100deg,#008d70,#00ad86,#50a842); -webkit-background-clip:text; background-clip:text; }.eyebrow,.section-kicker { color:#008d70; }.eyebrow span,.status-dot { background:#12a77f; box-shadow:0 0 0 4px rgba(18,167,127,.15); }.primary,.filters button.active { background:linear-gradient(135deg,#008f72,#00ae87 58%,#51ae4b); box-shadow:0 9px 0 #007359,0 16px 28px rgba(0,128,94,.28),inset 0 1px rgba(255,255,255,.7); }.primary:hover { box-shadow:0 6px 0 #007359,0 11px 20px rgba(0,128,94,.25),inset 0 1px rgba(255,255,255,.7); }.ghost { color:#087a60; border-color:#58b89f; }.floating-card,.skill-card,.project-card,.certificate,.contact-form,.project-form,.manage-list,.admin-stats span,.profile-card,.security-form,.appearance-preview,.appearance-controls { background:linear-gradient(145deg,rgba(246,255,251,.58),rgba(190,246,225,.3)); box-shadow:0 14px 30px rgba(0,105,80,.14),inset 0 2px rgba(255,255,255,.9),inset 0 -1px rgba(40,169,129,.2); }.skill-icon,.project-meta,.certificate-number,.manage-list span { color:#009374; }.project-arrow { color:#007e62; }.featured-section { background:linear-gradient(100deg,rgba(238,255,249,.3),rgba(189,247,225,.28),rgba(208,250,191,.26)); }.search input,.project-form input,.project-form textarea,.project-form select,.security-form input { border-color:rgba(0,137,105,.28); }.site-footer { background:linear-gradient(110deg,rgba(239,255,249,.45),rgba(180,244,220,.3)); }.footer-brand .brand,.footer-links h3,.footer-contact h3 { color:#07594c; }.footer-brand p,.footer-links a,.footer-contact>a,.footer-bottom { color:#397669; }.footer-socials a { color:#00856a; }.typing-cursor { background:#08a67e; box-shadow:0 0 8px #08a67e; }.compact-folder:before { background:#008f72 !important; box-shadow:0 -8px #008f72,0 8px #008f72 !important; }
+:root[data-theme='dark'] body { background:linear-gradient(rgba(6,42,35,.64),rgba(7,36,43,.7)),url('/nen.jpg') center / cover fixed; }:root[data-theme='dark'] .site-header,:root[data-theme='dark'] .floating-card,:root[data-theme='dark'] .skill-card,:root[data-theme='dark'] .project-card,:root[data-theme='dark'] .certificate,:root[data-theme='dark'] .contact-form,:root[data-theme='dark'] .project-form,:root[data-theme='dark'] .manage-list,:root[data-theme='dark'] .admin-stats span,:root[data-theme='dark'] .profile-card,:root[data-theme='dark'] .security-form,:root[data-theme='dark'] .appearance-preview,:root[data-theme='dark'] .appearance-controls { background:linear-gradient(145deg,rgba(11,78,67,.68),rgba(8,105,79,.42)); border-color:rgba(188,255,232,.22); }:root[data-theme='dark'] .site-footer { background:linear-gradient(110deg,rgba(8,73,63,.55),rgba(11,99,73,.4)); }
